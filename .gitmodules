@@ -1,0 +1,3 @@
+[submodule "vendor/github.com/valyala/fasthttp"]
+	path = vendor/github.com/valyala/fasthttp
+	url = https://github.com/valyala/fasthttp.git
