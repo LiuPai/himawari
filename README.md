@@ -9,6 +9,12 @@ as your desktop background.
 Set a cronjob that runs in every 10 minutes to automatically get the
 near-realtime picture of Earth.
 
+## install
+```
+go get github.com/valyala/fasthttp
+go get github.com/LiuPai/himawari
+```
+
 ## Supported Desktop Environments
 ### Tested
 * GNOME 3
@@ -34,17 +40,17 @@ time to download the tiles.
 
 You can also change the path of the latest picture, which is by default
 `/tmp/himawari.png`, by changing the `output` parameter.
-
-	-level int
-	Image quality and size choose one of [4, 8, 16, 20] (default 4)
-	-output string
-    	Path to the output file (default "/tmp/himiwari.png")
-	-retry int
-    	HTTP request retry times (default 5)
-	-timeout int
-    	HTTP request timeout in second (default 30)
-	-wallpaper
-    	If set desktop wallpaper to latest himiwary image (default true)
+	himawari
+		-level int
+		Image quality and size choose one of [4, 8, 16, 20] (default 4)
+		-output string
+    		Path to the output file (default "/tmp/himiwari.png")
+		-retry int
+    		HTTP request retry times (default 5)
+		-timeout int
+    		HTTP request timeout in second (default 30)
+		-wallpaper
+    		If set desktop wallpaper to latest himiwary image (default true)
 
 ## Configuration
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"config"
 	"desktop"
 	"himawari"
 	"flag"
@@ -36,9 +37,10 @@ func main() {
                 log.Fatalf("image output path open failed, err: %v", err)
         }
         defer file.Close()
-	
-        h := himawari.New(*retry, time.Duration(*timeout) * time.Second)
-	img, err := h.LatestImage(*level)
+
+	config.HTTPRetryTimes = *retry
+	config.HTTPTimesout = time.Duration(*timeout) * time.Second
+	img, err := himawari.LatestImage(*level)
 	if err != nil {
 		os.Exit(1)
 	}

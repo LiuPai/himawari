@@ -44,12 +44,9 @@ func SetBackground(path string) bool {
 		_ = exec.Command("pcmanfm", "--wallpaper-mode=fit",
 			"--set-wallpaper", path).Run()
 	case "mac":
-		_ = exec.Command("osascript", "-e", `tell application "System Events"
-set theDesktops to a reference to every desktop
-repeat with aDesktop in theDesktops
-set the picture of aDesktop to` + path + `
-end repeat
-end tell`).Run()
+		_ = exec.Command("osascript", "-e",
+			`tell application "System Events" to set picture of every desktop to "` +
+				path + `"`).Run()
 		_ = exec.Command("killall", "dock").Run()
 	case "windows":
 		_ = exec.Command("REG", "ADD", "HKCU\\Control Panel\\Desktop",
