@@ -11,7 +11,7 @@ near-realtime picture of Earth.
 
 ## install
 ```
-go get github.com/LiuPai/himawari/...
+go get github.com/LiuPai/himawari/cmd/himawari
 ```
 
 ## Usage
