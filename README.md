@@ -22,6 +22,7 @@ time to download the tiles.
 
 You can also change the path of the latest picture, which is by default
 `/tmp/himawari.png`, by changing the `output` parameter.
+```
 	himawari
 		-cache string
 			Path to the cache file directory (default "/tmp")
@@ -35,6 +36,7 @@ You can also change the path of the latest picture, which is by default
 			Himawari unix like system pid file
 		-tick uint
 			Duration to check himawari latest timestamp in seconds (default 300)
+```
 
 ## Configuration
 Change your desktop background point to himawari parameter -output(defalut: "/tmp/himawari.png").
