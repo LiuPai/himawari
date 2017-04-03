@@ -98,7 +98,7 @@ func main() {
 			latestTimestamp = timestamp
 			imageFile, err := himawari.FetchImage(*level,
 				latestTimestamp,
-				*output)
+				*cache)
 			if err != nil {
 				log.Print(err)
 			}
