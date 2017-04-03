@@ -139,6 +139,10 @@ func FetchImage(level int, timestamp *time.Time, cacheDir string) (string, error
 		fileName          = fmt.Sprintf("%s/himawari_%d.png",
 			cacheDir, timestamp.Unix())
 	)
+	// check if file exists
+	if _, err := os.Stat(fileName); err == nil {
+		return fileName, nil
+	}
 	for x := 0; x < level; x++ {
 		for y := 0; y < level; y++ {
 			fetchSliceManager.NewWork(&fetchSlice{

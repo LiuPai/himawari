@@ -78,7 +78,11 @@ func main() {
 
 	// daemon ticker
 	ticker := time.NewTicker(time.Second * time.Duration(*tick))
-	log.Println(*level, *tick)
+	log.Printf("level: %d", *level)
+	log.Printf("tick: %d", *tick)
+	log.Printf("cache: %s", *cache)
+	log.Printf("output: %s", *output)
+
 	err := checkLatestImage()
 	if err != nil {
 		log.Print(err)
