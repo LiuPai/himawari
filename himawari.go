@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/valyala/fasthttp"
 	"image"
 	"image/draw"
+	"image/png"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"time"
 )
@@ -24,187 +25,168 @@ const (
 	HTTPRetryTimes = 5
 )
 
-type (
-	// JSONTime time store in JSON
-	JSONTime   struct{ time.Time }
-	latestInfo struct {
-		Date JSONTime `json:"date"`
-		File string   `json:"file"`
-	}
-	payload struct {
-		level      int
-		x          int
-		y          int
-		latestTime time.Time
-		url        string
-		result     image.Image
-		err        error
-	}
-	work struct {
-		*payload
-		take  time.Time
-		tried int
-		retry chan bool
-	}
-)
+type latestInfo struct {
+	Date      string    `json:"date"`
+	File      string    `json:"file"`
+	Timestamp time.Time `json:"-"`
+}
 
-// UnmarshalJSON unmarshal date in JSON format
-func (t *JSONTime) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
+func (l *latestInfo) Name() string {
+	return "latest image info"
+}
+
+func (l *latestInfo) Do() error {
+	log.Println("Fetching latest image info")
+	resp, err := http.Get(LatestInfoURL)
+	if err != nil {
 		return err
 	}
-	tm, err := time.Parse("2006-01-02 15:04:05", s)
-	t.Time = tm
-	return err
-}
 
-func worker(workChan <-chan *work, reportChan chan<- *work) {
-	// take a job
-	w := <-workChan
-	w.take = time.Now()
-
-	w.url = fmt.Sprintf(TileImageURL,
-		w.level,
-		TileSize,
-		w.latestTime.Format("2006/01/02/150405"),
-		w.x, w.y)
-	// main loop
-	for <-w.retry {
-		w.tried++
-
-		fileName := fmt.Sprintf("%s/%d_%d_%d.png",
-			os.TempDir(), w.latestTime.Unix(), w.x, w.y)
-		// load file from cache
-		if _, err := os.Stat(fileName); err == nil {
-			d, err := ioutil.ReadFile(fileName)
-			if err != nil {
-				w.err = err
-				goto report
-			}
-			// decode image
-			img, _, err := image.Decode(bytes.NewReader(d))
-			if err != nil {
-				w.err = err
-				os.Remove(fileName)
-				goto report
-			}
-			w.payload.result = img
-		} else {
-			// load image from web
-			code, d, err :=
-				fasthttp.Get(nil, w.url)
-
-			if err == nil && code != 200 {
-				err = fmt.Errorf("status code %d", code)
-			}
-			if err != nil {
-				w.err = err
-				goto report
-			}
-			if w.err != nil {
-				goto report
-			}
-			// decode image
-			img, _, err := image.Decode(bytes.NewReader(d))
-			if err != nil {
-				w.err = err
-				goto report
-			}
-			w.payload.result = img
-			// save to cache
-			ioutil.WriteFile(fileName, d, 0666)
-		}
-	report:
-		// report result
-		reportChan <- w
-		// avoid quick retry
-		time.Sleep(time.Second * 1)
+	d, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
 	}
+	err = json.Unmarshal(d, l)
+	if err != nil {
+		return err
+	}
+	l.Timestamp, err = time.Parse("2006-01-02 15:04:05", l.Date)
+	if err != nil {
+		return err
+	}
+	log.Printf("latest image timestamp: %s", l.Timestamp.Local())
+	return nil
 }
 
-func buildImage(level int, date time.Time) (image.Image, error) {
+func (l *latestInfo) MaxFailTimes() int {
+	return HTTPRetryTimes
+}
+
+type fetchSlice struct {
+	level     int
+	x         int
+	y         int
+	timestamp *time.Time
+	result    draw.Image
+}
+
+func (f *fetchSlice) Name() string {
+	return fmt.Sprintf("slice_%d_%d_%d", f.level, f.x, f.y)
+}
+func (f *fetchSlice) Do() error {
+	url := fmt.Sprintf(TileImageURL,
+		f.level,
+		TileSize,
+		f.timestamp.Format("2006/01/02/150405"),
+		f.x, f.y)
+	fileName := fmt.Sprintf("%s/%d_%d_%d.png",
+		os.TempDir(), f.timestamp.Unix(), f.x, f.y)
+
+	var slice image.Image
+	// load file from cache
+	if _, err := os.Stat(fileName); err == nil {
+		d, err := ioutil.ReadFile(fileName)
+		if err != nil {
+			return err
+		}
+
+		// decode image
+		img, _, err := image.Decode(bytes.NewReader(d))
+		if err != nil {
+			_ = os.Remove(fileName)
+			return err
+		}
+		slice = img
+	} else {
+		// load image from web
+		resp, err := http.Get(url)
+		if err != nil {
+			return err
+		}
+		d, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		// decode image
+		img, _, err := image.Decode(bytes.NewReader(d))
+		if err != nil {
+			return err
+		}
+		slice = img
+		// save cache
+		err = ioutil.WriteFile(fileName, d, 0666)
+		if err != nil {
+			return err
+		}
+	}
+
+	draw.Draw(f.result,
+		image.Rect(TileSize*f.x, TileSize*f.y,
+			TileSize*(f.x+1), TileSize*(f.y+1)),
+		slice, image.Pt(0, 0), draw.Src)
+	return nil
+}
+
+func (f *fetchSlice) MaxFailTimes() int {
+	return HTTPRetryTimes
+}
+
+func FetchImage(level int, timestamp *time.Time, cacheDir string) (string, error) {
 	var (
-		tileNumber = level * level
-		img        = image.NewRGBA(
+		img = image.NewRGBA(
 			image.Rect(0, 0, TileSize*level, TileSize*level))
-		workChan   = make(chan *work)
-		reportChan = make(chan *work)
-		counter    int
+		fetchSliceManager = NewManager()
+		fileName          = fmt.Sprintf("%s/himawari_%d.png",
+			cacheDir, timestamp.Unix())
 	)
 	for x := 0; x < level; x++ {
 		for y := 0; y < level; y++ {
-			go worker(workChan, reportChan)
-			w := &work{
-                                payload: &payload{
-                                        level:      level,
-                                        x:          x,
-                                        y:          y,
-                                        latestTime: date,
-                                },
-                                retry: make(chan bool),
-                        }
-			workChan <- w
-			w.retry <- true
+			fetchSliceManager.NewWork(&fetchSlice{
+				level:     level,
+				x:         x,
+				y:         y,
+				timestamp: timestamp,
+				result:    img,
+			})
+		}
+	}
+	if !fetchSliceManager.Done() {
+		return "", fmt.Errorf("fetch image %s failed", fileName)
+	}
+	// save image
+
+	log.Printf("saving to %s ...", fileName)
+	file, err := os.Create(fileName)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	err = png.Encode(file, img)
+	if err != nil {
+		return "", err
+	}
+	// remove cache
+	for x := 0; x < level; x++ {
+		for y := 0; y < level; y++ {
+			fileName := fmt.Sprintf("%s/%d_%d_%d.png",
+				os.TempDir(), timestamp.Unix(), x, y)
+			_ = os.Remove(fileName)
 		}
 	}
 
-	for {
-		r := <-reportChan
-		if r.err != nil {
-			if r.tried < HTTPRetryTimes {
-				r.retry <- true
-				continue
-			} else {
-				r.retry <- false
-				println()
-				log.Printf("download %s failed after %d tried, err: %v",
-					r.url, r.tried, r.err)
-				return nil, r.err
-			}
-		}
-
-		draw.Draw(img,
-			image.Rect(TileSize*r.x, TileSize*r.y,
-				TileSize*(r.x+1), TileSize*(r.y+1)),
-			r.result, image.Pt(0, 0), draw.Src)
-
-		counter++
-		fmt.Printf("\rDownloading tiles: %d/%d completed",
-			counter, tileNumber)
-		if counter == tileNumber {
-			fmt.Println()
-			break
-		}
-	}
-	return img, nil
+	return fileName, nil
 }
 
 // LatestImage fetch the latest image from himawari in level
-func LatestImage(level int) (image.Image, error) {
+func LatestTimestamp() (*time.Time, error) {
 	var (
-		err    error
-		code   int
-		try    int
-		body   []byte
-		latest = new(latestInfo)
+		latestInfoManager = NewManager()
+		work              = new(latestInfo)
 	)
-	log.Println("Fetching latest image info")
-	for (err != nil || code != 200) && try <= HTTPRetryTimes {
-		try++
-		code, body, err = fasthttp.Get(nil, LatestInfoURL)
+
+	latestInfoManager.NewWork(work)
+	if !latestInfoManager.Done() {
+		return nil, fmt.Errorf("fetch latest image info failed")
 	}
-	if err != nil || code != 200 {
-		log.Printf("fetch latest image info from %s failed, code: %d err: %v",
-			LatestInfoURL, code, err)
-		return nil, fmt.Errorf("fetch latest info failed")
-	}
-	err = json.Unmarshal(body, latest)
-	if err != nil {
-		log.Printf("unmarshal JSON %s failed, err: %v",
-			string(body), err)
-		return nil, fmt.Errorf("decode latest info failed")
-	}
-	log.Printf("Latest version: %v", latest.Date.Local())
-	return buildImage(level, time.Time(latest.Date.Time))
+	return &work.Timestamp, nil
 }
