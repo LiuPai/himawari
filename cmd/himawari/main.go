@@ -92,6 +92,7 @@ func main() {
 		timestamp, err := himawari.LatestTimestamp()
 		if err != nil {
 			log.Print(err)
+			continue
 		}
 		// check latest timestamp
 		if timestamp.Unix() != latestTimestamp.Unix() {
@@ -101,11 +102,13 @@ func main() {
 				*cache)
 			if err != nil {
 				log.Print(err)
+				continue
 			}
 			_ = os.Remove(*output)
 			err = os.Symlink(imageFile, *output)
 			if err != nil {
 				log.Print(err)
+				continue
 			}
 		}
 	}

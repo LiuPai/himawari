@@ -34,8 +34,7 @@ func (w *Worker) Work() {
 		}
 		start := time.Now()
 		err := w.work.Do()
-		end := time.Now()
-		dur := end.Sub(start)
+		dur := time.Since(start)
 		if err == nil {
 			log.Printf("[%s] tried: %d use: %v done",
 				w.work.Name(), w.TriedTimes, dur)
