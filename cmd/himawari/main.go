@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
+	"image/color"
 	"io/ioutil"
 	"log"
 	"os"
@@ -21,11 +23,16 @@ var (
 		"The link of current himawari image")
 	daemon = flag.Bool("daemon", false,
 		"Run himawari as daemon")
+	coastline = flag.Bool("coastline", false,
+		"Draw coast line")
+	colorStr = flag.String("color", "ff0000ff",
+		"Coastline color RGBA hex string")
 	tick = flag.Uint("tick", 300,
 		"Duration to check himawari latest timestamp in seconds")
 	pidFile = flag.String("pid", "",
 		"Himawari unix like system pid file")
-	latestTimestamp *time.Time
+	latestTimestamp    *time.Time
+	coastlineImageFile string
 )
 
 func checkLatestImage() (err error) {
@@ -39,6 +46,12 @@ func checkLatestImage() (err error) {
 		*cache)
 	if err != nil {
 		return err
+	}
+	if coastlineImageFile != "" {
+		imageFile, err = himawari.MergeCoastline(imageFile)
+		if err != nil {
+			return err
+		}
 	}
 	_ = os.Remove(*output)
 	err = os.Symlink(imageFile, *output)
@@ -54,6 +67,33 @@ func main() {
 	case 4, 8, 16, 20:
 	default:
 		log.Fatalf("unsupport level value: %d", *level)
+	}
+	// fetch coastline
+	if *coastline {
+		var (
+			err  error
+			c    color.Color
+			data []byte
+		)
+		if *colorStr != "" && *colorStr != "ff0000ff" {
+			data, err = hex.DecodeString(*colorStr)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if len(data) != 4 {
+				log.Fatal("invalide color format")
+			}
+			c = color.RGBA{
+				R: data[0],
+				G: data[1],
+				B: data[2],
+				A: data[3],
+			}
+		}
+		coastlineImageFile, err = himawari.FetchCoastline(*level, c, *cache)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// oneshot fetch current himawari image
@@ -78,10 +118,6 @@ func main() {
 
 	// daemon ticker
 	ticker := time.NewTicker(time.Second * time.Duration(*tick))
-	log.Printf("level: %d", *level)
-	log.Printf("tick: %d", *tick)
-	log.Printf("cache: %s", *cache)
-	log.Printf("output: %s", *output)
 
 	err := checkLatestImage()
 	if err != nil {

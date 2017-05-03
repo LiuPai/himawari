@@ -26,6 +26,10 @@ You can also change the path of the latest picture, which is by default
 	himawari
 		-cache string
 			Path to the cache file directory (default "/tmp")
+		-coastline
+			Draw coast line
+		-color string
+			Coastline color RGBA hex string (default "ff0000ff")
 		-daemon
 			Run himawari as daemon
 		-level int
@@ -45,10 +49,9 @@ Most desktop environment will automatically update when file changed.
 If you would like to share why, you can contact me on github.
 
 ## Example
-![Earth, as 2016/02/04/13:30:00 GMT](http://i.imgur.com/4XA6WaM.jpg)
+![Earth, as 2017/05/03/07:30:00 GMT with coastline color 00ff0060](https://cloud.githubusercontent.com/assets/9007456/25653003/888ddaba-301d-11e7-9e03-8707c83c620f.png)
 
 ## TODO
-* border line support.
 * area select.
 
 ## Attributions
