@@ -140,6 +140,13 @@ func main() {
 				log.Print(err)
 				continue
 			}
+			if coastlineImageFile != "" {
+				imageFile, err = himawari.MergeCoastline(imageFile)
+				if err != nil {
+					log.Print(err)
+					continue
+				}
+			}
 			_ = os.Remove(*output)
 			err = os.Symlink(imageFile, *output)
 			if err != nil {
